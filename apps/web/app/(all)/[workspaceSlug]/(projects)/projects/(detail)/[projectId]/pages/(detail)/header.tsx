@@ -16,6 +16,8 @@ import { BreadcrumbLink } from "@/components/common/breadcrumb-link";
 import { PageAccessIcon } from "@/components/common/page-access-icon";
 import { SwitcherIcon, SwitcherLabel } from "@/components/common/switcher-label";
 import { PageHeaderActions } from "@/components/pages/header/actions";
+import { PageChildPagesDropdown } from "@/components/pages/header/child-pages-dropdown";
+import { buildPageTree } from "@/components/pages/list/tree";
 import { PageSyncingBadge } from "@/components/pages/header/syncing-badge";
 import { CommonProjectBreadcrumbs } from "@/components/breadcrumbs/common";
 // hooks
@@ -29,6 +31,10 @@ export interface IPagesHeaderProps {
 }
 
 const storeType = EPageStoreType.PROJECT;
+
+// cap the switcher indentation so very deep nesting stays readable, mirroring the pages list
+const MAX_INDENT_DEPTH = 8;
+const INDENT_WIDTH_PX = 12;
 
 export const PageDetailsHeader = observer(function PageDetailsHeader() {
   // router
@@ -56,22 +62,50 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
     ancestorId = ancestor.parent;
   }
 
-  const switcherOptions = projectPageIds
-    .map((id) => {
-      const _page = id === pageId ? page : getPageById(id);
-      if (!_page) return;
-      return {
-        value: _page.id,
-        query: _page.name,
-        content: (
-          <div className="flex items-center justify-between gap-2">
-            <SwitcherLabel logo_props={_page.logo_props} name={getPageName(_page.name)} LabelIcon={PageIcon} />
-            <PageAccessIcon {..._page} />
-          </div>
-        ),
-      };
-    })
-    .filter((option) => option !== undefined) as ICustomSearchSelectOption[];
+  const resolvePage = (id: string) => (id === pageId ? page : getPageById(id));
+  const pageTree = buildPageTree(
+    projectPageIds.map((id) => resolvePage(id)).filter((_page): _page is TPageInstance => !!_page)
+  );
+
+  const getPageOption = (id: string, depth = 0): ICustomSearchSelectOption | undefined => {
+    const _page = resolvePage(id);
+    if (!_page) return undefined;
+    return {
+      value: _page.id,
+      query: getPageName(_page.name),
+      content: (
+        <div
+          className="flex w-full items-center justify-between gap-2"
+          style={{ paddingLeft: Math.min(depth, MAX_INDENT_DEPTH) * INDENT_WIDTH_PX }}
+        >
+          <SwitcherLabel logo_props={_page.logo_props} name={getPageName(_page.name)} LabelIcon={PageIcon} />
+          <PageAccessIcon {..._page} />
+        </div>
+      ),
+    };
+  };
+
+  // full project switcher in tree order, indented by depth
+  const switcherOptions: ICustomSearchSelectOption[] = [];
+  const collectSwitcherOptions = (ids: string[], depth: number) => {
+    for (const id of ids) {
+      const option = getPageOption(id, depth);
+      if (option) switcherOptions.push(option);
+      collectSwitcherOptions(pageTree.childrenByParentId[id] ?? [], depth + 1);
+    }
+  };
+  collectSwitcherOptions(pageTree.rootIds, 0);
+
+  const getChildOptions = (parentId: string | undefined): ICustomSearchSelectOption[] =>
+    (parentId ? (pageTree.childrenByParentId[parentId] ?? []) : [])
+      .map((id) => getPageOption(id))
+      .filter((option): option is ICustomSearchSelectOption => !!option);
+
+  const childPageOptions = getChildOptions(pageId?.toString());
+
+  const navigateToPage = (id: string) => {
+    router.push(`/${workspaceSlug}/projects/${projectId}/pages/${id}`);
+  };
 
   if (!page) return null;
 
@@ -91,27 +125,36 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
               }
             />
 
-            {ancestorPages.map((ancestor) => (
+            {ancestorPages.map((ancestor, index) => (
               <Breadcrumbs.Item
                 key={ancestor.id}
+                showSeparator={false}
                 component={
-                  <BreadcrumbLink
-                    label={getPageName(ancestor.name)}
-                    href={`/${workspaceSlug}/projects/${projectId}/pages/${ancestor.id}`}
-                    icon={<SwitcherIcon logo_props={ancestor.logo_props} LabelIcon={PageIcon} size={16} />}
+                  <BreadcrumbNavigationSearchDropdown
+                    selectedItem={ancestorPages[index + 1]?.id ?? pageId?.toString() ?? ""}
+                    navigationItems={getChildOptions(ancestor.id)}
+                    onChange={navigateToPage}
+                    title={getPageName(ancestor.name)}
+                    icon={
+                      <Breadcrumbs.Icon>
+                        <SwitcherIcon logo_props={ancestor.logo_props} LabelIcon={PageIcon} size={16} />
+                      </Breadcrumbs.Icon>
+                    }
+                    handleOnClick={() => {
+                      if (ancestor.id) navigateToPage(ancestor.id);
+                    }}
                   />
                 }
               />
             ))}
 
             <Breadcrumbs.Item
+              showSeparator={false}
               component={
                 <BreadcrumbNavigationSearchDropdown
                   selectedItem={pageId?.toString() ?? ""}
                   navigationItems={switcherOptions}
-                  onChange={(value: string) => {
-                    router.push(`/${workspaceSlug}/projects/${projectId}/pages/${value}`);
-                  }}
+                  onChange={navigateToPage}
                   title={getPageName(page?.name)}
                   icon={
                     <Breadcrumbs.Icon>
@@ -122,6 +165,13 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
                 />
               }
             />
+
+            {childPageOptions.length > 0 && (
+              <Breadcrumbs.Item
+                showSeparator={false}
+                component={<PageChildPagesDropdown options={childPageOptions} onSelect={navigateToPage} />}
+              />
+            )}
           </Breadcrumbs>
         </div>
       </Header.LeftItem>
