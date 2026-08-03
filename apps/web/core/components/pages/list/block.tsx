@@ -6,10 +6,11 @@
 
 import { useRef } from "react";
 import { observer } from "mobx-react";
+import { ChevronRight } from "lucide-react";
 import { Logo } from "@plane/propel/emoji-icon-picker";
 import { PageIcon } from "@plane/propel/icons";
 // plane imports
-import { getPageName } from "@plane/utils";
+import { cn, getPageName } from "@plane/utils";
 // components
 import { ListItem } from "@/components/core/list";
 import { BlockItemAction } from "@/components/pages/list/block-item-action";
@@ -19,13 +20,31 @@ import { usePlatformOS } from "@/hooks/use-platform-os";
 import type { EPageStoreType } from "@/hooks/store";
 import { usePage } from "@/hooks/store";
 
+// cap the indentation so very deep nesting stays readable and never overflows
+const MAX_INDENT_DEPTH = 8;
+const INDENT_WIDTH_PX = 20;
+
 type TPageListBlock = {
   pageId: string;
   storeType: EPageStoreType;
+  // tree props
+  depth?: number;
+  showTreeControls?: boolean;
+  hasChildren?: boolean;
+  isExpanded?: boolean;
+  onToggleExpanded?: () => void;
 };
 
 export const PageListBlock = observer(function PageListBlock(props: TPageListBlock) {
-  const { pageId, storeType } = props;
+  const {
+    pageId,
+    storeType,
+    depth = 0,
+    showTreeControls = false,
+    hasChildren = false,
+    isExpanded = false,
+    onToggleExpanded,
+  } = props;
   // refs
   const parentRef = useRef(null);
   // hooks
@@ -43,6 +62,34 @@ export const PageListBlock = observer(function PageListBlock(props: TPageListBlo
     <ListItem
       prependTitleElement={
         <>
+          {showTreeControls && (
+            <>
+              {depth > 0 && (
+                <span
+                  className="flex-shrink-0"
+                  style={{ width: Math.min(depth, MAX_INDENT_DEPTH) * INDENT_WIDTH_PX }}
+                />
+              )}
+              <span className="mr-1 grid size-5 flex-shrink-0 place-items-center">
+                {hasChildren && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onToggleExpanded?.();
+                    }}
+                    className="grid place-items-center rounded p-0.5 hover:bg-layer-1"
+                    aria-label={isExpanded ? "Collapse sub-pages" : "Expand sub-pages"}
+                  >
+                    <ChevronRight
+                      className={cn("h-3.5 w-3.5 text-tertiary transition-transform", isExpanded && "rotate-90")}
+                    />
+                  </button>
+                )}
+              </span>
+            </>
+          )}
           {logo_props?.in_use ? (
             <Logo logo={logo_props} size={16} type="lucide" />
           ) : (
