@@ -16,8 +16,8 @@ type Props = {
 };
 
 /**
- * @description trailing breadcrumb chevron that lists the current page's sub-pages,
- * file-explorer style: `... / Current ▾ / ›` where `›` opens the children dropdown.
+ * @description trailing breadcrumb chevron that lists the current page's whole subtree
+ * (children and sub-children, indented), file-explorer style: `... / Current ▾ / ›`.
  * Renders nothing when the page has no children.
  */
 export function PageChildPagesDropdown(props: Props) {

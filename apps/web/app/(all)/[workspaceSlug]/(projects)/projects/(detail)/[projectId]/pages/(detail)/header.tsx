@@ -85,23 +85,28 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
     };
   };
 
-  // full project switcher in tree order, indented by depth
-  const switcherOptions: ICustomSearchSelectOption[] = [];
-  const collectSwitcherOptions = (ids: string[], depth: number) => {
-    for (const id of ids) {
-      const option = getPageOption(id, depth);
-      if (option) switcherOptions.push(option);
-      collectSwitcherOptions(pageTree.childrenByParentId[id] ?? [], depth + 1);
-    }
-  };
-  collectSwitcherOptions(pageTree.rootIds, 0);
-
-  const getChildOptions = (parentId: string | undefined): ICustomSearchSelectOption[] =>
-    (parentId ? (pageTree.childrenByParentId[parentId] ?? []) : [])
+  // flat list of the alternatives for a crumb's position: the children of its
+  // parent, or the root pages when it sits at the top level (orphans included)
+  const getSiblingOptions = (_page: TPageInstance): ICustomSearchSelectOption[] => {
+    const siblingIds =
+      _page.parent && _page.id && pageTree.childrenByParentId[_page.parent]?.includes(_page.id)
+        ? pageTree.childrenByParentId[_page.parent]
+        : pageTree.rootIds;
+    return siblingIds
       .map((id) => getPageOption(id))
       .filter((option): option is ICustomSearchSelectOption => !!option);
+  };
 
-  const childPageOptions = getChildOptions(pageId?.toString());
+  // the current page's full subtree in tree order, indented by depth
+  const descendantOptions: ICustomSearchSelectOption[] = [];
+  const collectDescendantOptions = (ids: string[], depth: number) => {
+    for (const id of ids) {
+      const option = getPageOption(id, depth);
+      if (option) descendantOptions.push(option);
+      collectDescendantOptions(pageTree.childrenByParentId[id] ?? [], depth + 1);
+    }
+  };
+  collectDescendantOptions(pageTree.childrenByParentId[pageId?.toString() ?? ""] ?? [], 0);
 
   const navigateToPage = (id: string) => {
     router.push(`/${workspaceSlug}/projects/${projectId}/pages/${id}`);
@@ -125,14 +130,14 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
               }
             />
 
-            {ancestorPages.map((ancestor, index) => (
+            {ancestorPages.map((ancestor) => (
               <Breadcrumbs.Item
                 key={ancestor.id}
                 showSeparator={false}
                 component={
                   <BreadcrumbNavigationSearchDropdown
-                    selectedItem={ancestorPages[index + 1]?.id ?? pageId?.toString() ?? ""}
-                    navigationItems={getChildOptions(ancestor.id)}
+                    selectedItem={ancestor.id ?? ""}
+                    navigationItems={getSiblingOptions(ancestor)}
                     onChange={navigateToPage}
                     title={getPageName(ancestor.name)}
                     icon={
@@ -153,7 +158,7 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
               component={
                 <BreadcrumbNavigationSearchDropdown
                   selectedItem={pageId?.toString() ?? ""}
-                  navigationItems={switcherOptions}
+                  navigationItems={getSiblingOptions(page)}
                   onChange={navigateToPage}
                   title={getPageName(page?.name)}
                   icon={
@@ -166,10 +171,10 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
               }
             />
 
-            {childPageOptions.length > 0 && (
+            {descendantOptions.length > 0 && (
               <Breadcrumbs.Item
                 showSeparator={false}
-                component={<PageChildPagesDropdown options={childPageOptions} onSelect={navigateToPage} />}
+                component={<PageChildPagesDropdown options={descendantOptions} onSelect={navigateToPage} />}
               />
             )}
           </Breadcrumbs>
