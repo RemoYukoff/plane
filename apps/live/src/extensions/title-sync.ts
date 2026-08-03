@@ -43,21 +43,46 @@ export class TitleSyncExtension implements Extension {
   > = new Map();
 
   /**
-   * Handle document loading - migrate old titles if needed
+   * Handle document loading - Postgres `Page.name` is the source of truth for the title.
+   *
+   * Two cases both funnel through the same reconciliation:
+   *  1. Migration: older documents never had a "title" Yjs fragment at all.
+   *  2. Drift: the title was changed out-of-band (REST API, admin, MCP, etc.) without
+   *     going through the collaborative editor, so the Yjs fragment still holds a stale
+   *     value. This also covers a client reconnecting with a stale IndexedDB-cached
+   *     Y.Doc (e.g. from before an out-of-band rename): whatever that client merges in
+   *     is reconciled back to Postgres here rather than being treated as authoritative.
+   *
+   * In both cases we overwrite the "title" fragment with `Page.name` from Postgres,
+   * so a rename done outside the editor survives the next time this document loads.
    */
   async onLoadDocument({ context, document, documentName }: OnLoadDocumentPayloadWithContext) {
     try {
-      // initially for on demand migration of old titles to a new title field
-      // in the yjs binary
-      if (document.isEmpty("title")) {
-        const service = getPageService(context.documentType, context);
-        const pageDetails = await service.fetchDetails(documentName);
-        const title = pageDetails.name;
-        if (title == null) return;
-        const titleJson = (generateTitleProsemirrorJson as (text: string) => JSONContent)(title);
-        const titleField = TiptapTransformer.toYdoc(titleJson, "title", TITLE_EDITOR_EXTENSIONS as AnyExtension[]);
-        document.merge(titleField);
+      const service = getPageService(context.documentType, context);
+      const pageDetails = await service.fetchDetails(documentName);
+      const title = pageDetails.name;
+      if (title == null) return;
+
+      const isTitleFieldEmpty = document.isEmpty("title");
+      const currentTitle = isTitleFieldEmpty
+        ? ""
+        : extractTextFromHTML(document.getXmlFragment("title").toJSON() as string);
+
+      // Nothing to reconcile: the Yjs fragment already matches Postgres.
+      if (!isTitleFieldEmpty && currentTitle === title) return;
+
+      // Clear any existing (stale) title content before writing the reconciled value,
+      // so we don't end up appending alongside old content.
+      if (!isTitleFieldEmpty) {
+        const titleFragment = document.getXmlFragment("title");
+        titleFragment.doc?.transact(() => {
+          titleFragment.delete(0, titleFragment.length);
+        });
       }
+
+      const titleJson = (generateTitleProsemirrorJson as (text: string) => JSONContent)(title);
+      const titleField = TiptapTransformer.toYdoc(titleJson, "title", TITLE_EDITOR_EXTENSIONS as AnyExtension[]);
+      document.merge(titleField);
     } catch (error) {
       const appError = new AppError(error, {
         context: { operation: "onLoadDocument", documentName },
