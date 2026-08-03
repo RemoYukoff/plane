@@ -69,3 +69,4 @@ from .member import (
 )
 from .sticky import StickySerializer
 from .page import PageSerializer, PageDetailSerializer
+from .work_item_type import WorkItemTypeSerializer

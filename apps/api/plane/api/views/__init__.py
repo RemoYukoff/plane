@@ -78,3 +78,11 @@ from .page import (
     PageDetailAPIEndpoint,
     PageArchiveUnarchiveAPIEndpoint,
 )
+
+from .work_item_type import (
+    WorkItemTypeListCreateAPIEndpoint,
+    WorkItemTypeDetailAPIEndpoint,
+    WorkItemTypeImportAPIEndpoint,
+    WorkspaceWorkItemTypeListCreateAPIEndpoint,
+    WorkspaceWorkItemTypeDetailAPIEndpoint,
+)

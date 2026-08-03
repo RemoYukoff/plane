@@ -265,7 +265,7 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
     use_read_replica = True
 
     def get_queryset(self):
-        return (
+        queryset = (
             Issue.issue_objects.annotate(
                 sub_issues_count=Issue.issue_objects.filter(parent=OuterRef("id"))
                 .order_by()
@@ -278,10 +278,25 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
             .select_related("workspace")
             .select_related("state")
             .select_related("parent")
+            .select_related("type")
             .prefetch_related("assignees")
             .prefetch_related("labels")
             .order_by(self.kwargs.get("order_by", "-created_at"))
         ).distinct()
+
+        # Narrow filters used to work with typed work items (e.g. epics) and to
+        # list the children of a given work item.
+        type_id = self.request.GET.get("type_id")
+        if type_id:
+            queryset = queryset.filter(type_id__in=[value for value in type_id.split(",") if value])
+
+        parent_id = self.request.GET.get("parent_id")
+        if parent_id == "null":
+            queryset = queryset.filter(parent__isnull=True)
+        elif parent_id:
+            queryset = queryset.filter(parent_id__in=[value for value in parent_id.split(",") if value])
+
+        return queryset
 
     @work_item_docs(
         operation_id="list_work_items",
@@ -381,6 +396,23 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
         )
 
         total_issue_queryset = Issue.issue_objects.filter(project_id=project_id, workspace__slug=slug)
+
+        # Keep the total consistent with the narrow filters applied in
+        # get_queryset, otherwise a filtered request reports the project-wide
+        # total and callers overcount.
+        type_id = request.GET.get("type_id")
+        if type_id:
+            total_issue_queryset = total_issue_queryset.filter(
+                type_id__in=[value for value in type_id.split(",") if value]
+            )
+
+        parent_id = request.GET.get("parent_id")
+        if parent_id == "null":
+            total_issue_queryset = total_issue_queryset.filter(parent__isnull=True)
+        elif parent_id:
+            total_issue_queryset = total_issue_queryset.filter(
+                parent_id__in=[value for value in parent_id.split(",") if value]
+            )
 
         # Priority Ordering
         if order_by_param == "priority" or order_by_param == "-priority":
