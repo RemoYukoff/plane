@@ -9,10 +9,17 @@ import { makeObservable, observable, runInAction, action, reaction, computed } f
 import { computedFn } from "mobx-utils";
 // types
 import { EUserPermissions } from "@plane/constants";
-import type { TPage, TPageFilters, TPageNavigationTabs } from "@plane/types";
+import type {
+  TPage,
+  TPageFilters,
+  TPageFiltersSortBy,
+  TPageFiltersSortKey,
+  TPageNavigationTabs,
+} from "@plane/types";
 import { EUserProjectRoles } from "@plane/types";
 // helpers
 import { filterPagesByPageType, getPageName, orderPages, shouldFilterPage } from "@plane/utils";
+import { storage } from "@/lib/local-storage";
 // plane web constants
 // plane web store
 // services
@@ -25,6 +32,16 @@ import { ProjectPage } from "./project-page";
 type TLoader = "init-loader" | "mutation-loader" | undefined;
 
 type TError = { title: string; description: string };
+
+// localStorage key
+const PROJECT_PAGE_FILTERS_KEY = "project_page_filters";
+
+// persisted subset of the filters, searchQuery is intentionally left out since
+// it is reset on every project change
+type TPersistedPageFilters = Pick<TPageFilters, "sortKey" | "sortBy" | "filters">;
+
+const PAGE_SORT_KEYS: TPageFiltersSortKey[] = ["name", "created_at", "updated_at", "opened_at"];
+const PAGE_SORT_ORDERS: TPageFiltersSortBy[] = ["asc", "desc"];
 
 export const ROLE_PERMISSIONS_TO_CREATE_PAGE = [
   EUserPermissions.ADMIN,
@@ -49,6 +66,7 @@ export interface IProjectPageStore {
   getPageById: (pageId: string) => TProjectPage | undefined;
   updateFilters: <T extends keyof TPageFilters>(filterKey: T, filterValue: TPageFilters[T]) => void;
   clearAllFilters: () => void;
+  loadFiltersFromLocalStorage: () => void;
   // actions
   fetchPagesList: (
     workspaceSlug: string,
@@ -93,6 +111,7 @@ export class ProjectPageStore implements IProjectPageStore {
       // helper actions
       updateFilters: action,
       clearAllFilters: action,
+      loadFiltersFromLocalStorage: action,
       // actions
       fetchPagesList: action,
       fetchPageDetails: action,
@@ -111,7 +130,40 @@ export class ProjectPageStore implements IProjectPageStore {
         this.filters.searchQuery = "";
       }
     );
+
+    // restore the last filters used by this user
+    this.loadFiltersFromLocalStorage();
   }
+
+  /**
+   * @description load the persisted filters from localStorage, falling back to
+   * the defaults when nothing is stored or the stored value is malformed
+   */
+  loadFiltersFromLocalStorage = () => {
+    try {
+      const storedFilters = storage.get(PROJECT_PAGE_FILTERS_KEY);
+      if (!storedFilters) return;
+
+      const parsed = JSON.parse(storedFilters) as TPersistedPageFilters;
+      if (typeof parsed !== "object" || parsed === null) return;
+
+      runInAction(() => {
+        if (PAGE_SORT_KEYS.includes(parsed.sortKey)) this.filters.sortKey = parsed.sortKey;
+        if (PAGE_SORT_ORDERS.includes(parsed.sortBy)) this.filters.sortBy = parsed.sortBy;
+        if (typeof parsed.filters === "object" && parsed.filters !== null) this.filters.filters = parsed.filters;
+      });
+    } catch (error) {
+      console.error("Failed to load page filters from localStorage:", error);
+    }
+  };
+
+  /**
+   * @description persist the filters, excluding the search query
+   */
+  saveFiltersToLocalStorage = () => {
+    const { sortKey, sortBy, filters } = this.filters;
+    storage.set(PROJECT_PAGE_FILTERS_KEY, { sortKey, sortBy, filters: filters ?? {} });
+  };
 
   /**
    * @description check if any page is available
@@ -192,15 +244,18 @@ export class ProjectPageStore implements IProjectPageStore {
     runInAction(() => {
       set(this.filters, [filterKey], filterValue);
     });
+    if (filterKey !== "searchQuery") this.saveFiltersToLocalStorage();
   };
 
   /**
    * @description clear all the filters
    */
-  clearAllFilters = () =>
+  clearAllFilters = () => {
     runInAction(() => {
       set(this.filters, ["filters"], {});
     });
+    this.saveFiltersToLocalStorage();
+  };
 
   /**
    * @description fetch all the pages
