@@ -1,1 +1,33 @@
+# Normalise every text file to LF, in the repository and in the working tree.
+#
+# Without the working-tree half (eol=lf), Git for Windows' core.autocrlf leaves
+# LF files alone on checkout but any tool that rewrites a file with CRLF — pnpm
+# touching package.json/lockfiles, a formatter run — makes Git report it as
+# modified while the content diff is empty. Pinning eol=lf makes Git normalise
+# those writes away instead of surfacing them as phantom changes.
+#
+# LF is also required, not just tidier: the API images run Linux, and a shell
+# script or entrypoint checked out with CRLF fails with `bad interpreter: ^M`.
+* text=auto eol=lf
+
+# Shell scripts must stay LF even if someone overrides the rule above.
 *.sh text eol=lf
+
+# Binary assets must never be touched by end-of-line conversion.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.pdf binary
+*.mp4 binary
+*.webm binary
+*.zip binary
+*.gz binary
