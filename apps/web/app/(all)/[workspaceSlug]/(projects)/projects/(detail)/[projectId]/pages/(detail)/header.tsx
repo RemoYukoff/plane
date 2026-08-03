@@ -20,6 +20,7 @@ import { PageSyncingBadge } from "@/components/pages/header/syncing-badge";
 import { CommonProjectBreadcrumbs } from "@/components/breadcrumbs/common";
 // hooks
 import { useProject } from "@/hooks/store/use-project";
+import type { TPageInstance } from "@/store/pages/base-page";
 import { useAppRouter } from "@/hooks/use-app-router";
 import { EPageStoreType, usePage, usePageStore } from "@/hooks/store";
 
@@ -42,6 +43,18 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
   });
   // derived values
   const projectPageIds = getCurrentProjectPageIds(projectId?.toString());
+
+  // ancestor chain of the current page, root first; guards against parent cycles
+  const ancestorPages: TPageInstance[] = [];
+  const visitedPageIds = new Set<string>([pageId?.toString() ?? ""]);
+  let ancestorId = page?.parent;
+  while (ancestorId && !visitedPageIds.has(ancestorId)) {
+    const ancestor = getPageById(ancestorId);
+    if (!ancestor) break;
+    visitedPageIds.add(ancestorId);
+    ancestorPages.unshift(ancestor);
+    ancestorId = ancestor.parent;
+  }
 
   const switcherOptions = projectPageIds
     .map((id) => {
@@ -77,6 +90,19 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
                 />
               }
             />
+
+            {ancestorPages.map((ancestor) => (
+              <Breadcrumbs.Item
+                key={ancestor.id}
+                component={
+                  <BreadcrumbLink
+                    label={getPageName(ancestor.name)}
+                    href={`/${workspaceSlug}/projects/${projectId}/pages/${ancestor.id}`}
+                    icon={<SwitcherIcon logo_props={ancestor.logo_props} LabelIcon={PageIcon} size={16} />}
+                  />
+                }
+              />
+            ))}
 
             <Breadcrumbs.Item
               component={
