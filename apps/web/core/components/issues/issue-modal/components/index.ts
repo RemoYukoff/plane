@@ -5,6 +5,7 @@
  */
 
 export * from "./project-select";
+export * from "./issue-type-select";
 export * from "./parent-tag";
 export * from "./title-input";
 export * from "./description-editor";

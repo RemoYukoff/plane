@@ -59,6 +59,7 @@ export const iconsMap: ActivityIconMap = {
   attachment: Paperclip,
   name: Type,
   state: StatePropertyIcon,
+  type: ListTodo,
   estimate: EstimatePropertyIcon,
   cycle: CycleIcon,
   module: ModuleIcon,
@@ -151,6 +152,14 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
         message: (
           <>
             set the state to <span className="font-medium text-primary">{newValue || "none"}</span>
+          </>
+        ),
+      };
+    case "type":
+      return {
+        message: (
+          <>
+            set the work item type to <span className="font-medium text-primary">{newValue || "none"}</span>
           </>
         ),
       };

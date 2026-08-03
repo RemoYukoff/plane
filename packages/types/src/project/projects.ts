@@ -30,6 +30,8 @@ export interface IPartialProject {
   module_view: boolean;
   page_view: boolean;
   inbox_view: boolean;
+  /** derived server-side: true once the project has at least one work item type linked */
+  is_issue_type_enabled: boolean;
   guest_view_all_features?: boolean;
   project_lead?: IUserLite | string | null;
   network?: number;
