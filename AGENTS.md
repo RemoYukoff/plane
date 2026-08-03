@@ -1,5 +1,22 @@
 # Agent Development Guide
 
+## Sparse checkout — not every folder is on disk
+
+This clone uses git sparse-checkout (cone mode). Only these directories are materialized, plus root files:
+
+- `.github`
+- `apps/api`
+- `apps/live`
+- `apps/web`
+- `packages`
+
+Everything else in the repo (`apps/space`, `apps/admin`, `apps/proxy`, `deployments`, ...) **exists in git history and on GitHub but is NOT in the working directory**. Implications:
+
+- A folder "missing" locally is not missing from the repo — check with `git ls-tree HEAD <path>` before concluding anything.
+- To work on an excluded folder, materialize it first: `git sparse-checkout add <dir>` (never edit `.git/info/sparse-checkout` by hand).
+- CI builds on GitHub runners use a full checkout, so workflows can reference paths that don't exist locally (e.g. `apps/space/Dockerfile.space`).
+- After `git sparse-checkout add` or pnpm installs, `git status` may show `package.json`/lockfile entries as modified with an **empty content diff** (LF→CRLF noise on Windows). Restore them with `git checkout -- <paths>`; don't commit them.
+
 ## Commands
 
 - `pnpm dev` - Start all dev servers (web:3000, admin:3001)
