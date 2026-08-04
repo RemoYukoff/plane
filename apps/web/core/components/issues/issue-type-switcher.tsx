@@ -61,7 +61,9 @@ export const IssueTypeSwitcher = observer(function IssueTypeSwitcher(props: TIss
           projectId={projectId}
           buttonVariant="border-with-text"
           dropdownArrow
-          // an epic stays an epic: only offer epic types when it already is one
+          // Converting between an epic and a plain work item would change what
+          // the item may parent, which this switcher does not handle: offer only
+          // types of the same kind. Pick the kind at creation time instead.
           includeEpics={!!issue.is_epic}
         />
       )}

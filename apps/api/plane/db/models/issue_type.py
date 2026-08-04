@@ -11,6 +11,28 @@ from .project import ProjectBaseModel
 from .base import BaseModel
 
 
+# Types every project starts with. Upstream seeds these in the paid editions;
+# without them a project has no type at all and nothing type related renders.
+DEFAULT_ISSUE_TYPES = [
+    {
+        "name": "Task",
+        "description": "A unit of work.",
+        "logo_props": {"in_use": "icon", "icon": {"name": "task_alt"}},
+        "is_epic": False,
+        "is_default": True,
+        "level": 0,
+    },
+    {
+        "name": "Epic",
+        "description": "Groups related work items under a single goal.",
+        "logo_props": {"in_use": "icon", "icon": {"name": "bolt"}},
+        "is_epic": True,
+        "is_default": False,
+        "level": 1,
+    },
+]
+
+
 class IssueType(BaseModel):
     workspace = models.ForeignKey("db.Workspace", related_name="issue_types", on_delete=models.CASCADE)
     name = models.CharField(max_length=255)

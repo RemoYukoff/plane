@@ -41,6 +41,7 @@ from plane.db.models import (
 )
 from plane.db.models.intake import IntakeIssueStatus
 from plane.utils.host import base_host
+from plane.utils.issue_type import seed_project_issue_types
 from plane.utils.order_queryset import PROJECT_ORDER_BY_ALLOWLIST, sanitize_order_by
 
 
@@ -293,6 +294,9 @@ class ProjectViewSet(BaseViewSet):
                     for state in DEFAULT_STATES
                 ]
             )
+
+            # Give the project the default work item types (Task, Epic)
+            seed_project_issue_types(serializer.instance, actor_id=request.user.id)
 
             project = self.get_queryset().filter(pk=serializer.data["id"]).first()
 

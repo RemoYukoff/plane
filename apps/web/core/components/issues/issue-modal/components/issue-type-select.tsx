@@ -55,6 +55,9 @@ export const IssueTypeSelect = observer(function IssueTypeSelect(props: TIssueTy
             projectId={projectId ?? undefined}
             placeholder={t("work_item_types.label")}
             buttonVariant="border-with-text"
+            // an epic is a work item whose type is an epic one, so it is created
+            // from this same modal rather than through a separate flow
+            includeEpics
             dropdownArrow
             tabIndex={getIndex("type_id")}
             disabled={disabled}
