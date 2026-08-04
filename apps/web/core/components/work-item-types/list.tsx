@@ -36,12 +36,13 @@ export const ProjectSettingsIssueTypeList = observer(function ProjectSettingsIss
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [issueTypeToUpdate, setIssueTypeToUpdate] = useState<TIssueType | undefined>(undefined);
   // store hooks
-  const { getProjectIssueTypes, fetchProjectIssueTypes, updateIssueType, removeIssueTypeFromProject } = useIssueType();
+  const { getAllProjectIssueTypes, fetchProjectIssueTypes, updateIssueType, removeIssueTypeFromProject } =
+    useIssueType();
   const { allowPermissions } = useUserPermissions();
   // derived values
   const isEditable = allowPermissions([EUserPermissions.ADMIN], EUserPermissionsLevel.PROJECT);
   // settings is where an inactive type gets switched back on, so it has to list them
-  const issueTypes = getProjectIssueTypes(projectId?.toString(), true);
+  const issueTypes = getAllProjectIssueTypes(projectId?.toString());
 
   const { isLoading } = useSWR(
     workspaceSlug && projectId ? `PROJECT_ISSUE_TYPES_${workspaceSlug}_${projectId}` : null,

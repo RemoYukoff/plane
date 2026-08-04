@@ -25,6 +25,7 @@ import {
   PROJECT_MODULES,
   PROJECT_VIEWS,
   PROJECT_INTAKE_STATE,
+  PROJECT_ISSUE_TYPES,
 } from "@plane/constants";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
@@ -32,6 +33,7 @@ import { useCycle } from "@/hooks/store/use-cycle";
 import { useLabel } from "@/hooks/store/use-label";
 import { useMember } from "@/hooks/store/use-member";
 import { useModule } from "@/hooks/store/use-module";
+import { useIssueType } from "@/hooks/store/use-issue-type";
 import { useProject } from "@/hooks/store/use-project";
 import { useProjectState } from "@/hooks/store/use-project-state";
 import { useProjectView } from "@/hooks/store/use-project-view";
@@ -61,6 +63,7 @@ export const ProjectAuthWrapper = observer(function ProjectAuthWrapper(props: IP
     project: { fetchProjectMembers, fetchProjectUserProperties },
   } = useMember();
   const { fetchProjectStates, fetchProjectIntakeState } = useProjectState();
+  const { fetchProjectIssueTypes } = useIssueType();
   const { data: currentUserData } = useUser();
   const { fetchProjectLabels } = useLabel();
   const { getProjectEstimates } = useProjectEstimates();
@@ -109,6 +112,12 @@ export const ProjectAuthWrapper = observer(function ProjectAuthWrapper(props: IP
   });
   // fetching project intake state
   useSWR(PROJECT_INTAKE_STATE(projectId, currentProjectRole), () => fetchProjectIntakeState(workspaceSlug, projectId), {
+    revalidateIfStale: false,
+    revalidateOnFocus: false,
+  });
+  // fetching project work item types — the create-modal picker reads them from
+  // the store, so they have to be hydrated here like every other project entity
+  useSWR(PROJECT_ISSUE_TYPES(projectId, currentProjectRole), () => fetchProjectIssueTypes(workspaceSlug, projectId), {
     revalidateIfStale: false,
     revalidateOnFocus: false,
   });

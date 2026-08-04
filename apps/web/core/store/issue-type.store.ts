@@ -20,7 +20,8 @@ export interface IIssueTypeStore {
   fetchedMap: Record<string, boolean>;
   // computed actions
   getIssueTypeById: (issueTypeId: string | null | undefined) => TIssueType | undefined;
-  getProjectIssueTypes: (projectId: string | null | undefined, includeInactive?: boolean) => TIssueType[];
+  getProjectIssueTypes: (projectId: string | null | undefined) => TIssueType[];
+  getAllProjectIssueTypes: (projectId: string | null | undefined) => TIssueType[];
   getProjectIssueTypeIds: (projectId: string | null | undefined) => string[];
   getProjectDefaultIssueTypeId: (projectId: string | null | undefined) => string | undefined;
   getProjectEpicTypeId: (projectId: string | null | undefined) => string | undefined;
@@ -72,15 +73,12 @@ export class IssueTypeStore implements IIssueTypeStore {
     return this.issueTypeMap[issueTypeId];
   });
 
-  /**
-   * Types linked to a project, ordered the way they are shown in pickers.
-   *
-   * Inactive types are left out by default so they stop being offered when
-   * creating work items. Settings passes ``includeInactive`` — hiding them
-   * there would make deactivating a type look like deleting it, with no way
-   * back short of recreating it.
-   */
-  getProjectIssueTypes = computedFn((projectId: string | null | undefined, includeInactive = false): TIssueType[] => {
+  // Shared by the two getters below. computedFn memoizes per call signature and
+  // throws if the same function is ever called with a different number of
+  // arguments ("DeepMap should be used with functions with a consistent
+  // length"), so this cannot be one computedFn with an optional flag — it has
+  // to be two fixed-arity getters delegating to a plain helper.
+  private filterProjectIssueTypes = (projectId: string | null | undefined, includeInactive: boolean): TIssueType[] => {
     if (!projectId) return [];
     return sortBy(
       Object.values(this.issueTypeMap).filter(
@@ -88,7 +86,25 @@ export class IssueTypeStore implements IIssueTypeStore {
       ),
       ["level", "name"]
     );
-  });
+  };
+
+  /**
+   * Active types linked to a project, ordered the way they are shown in
+   * pickers. Inactive types are left out so they stop being offered when
+   * creating work items.
+   */
+  getProjectIssueTypes = computedFn((projectId: string | null | undefined): TIssueType[] =>
+    this.filterProjectIssueTypes(projectId, false)
+  );
+
+  /**
+   * Every type linked to a project, inactive ones included. Settings uses
+   * this — hiding inactive types there would make deactivating a type look
+   * like deleting it, with no way back short of recreating it.
+   */
+  getAllProjectIssueTypes = computedFn((projectId: string | null | undefined): TIssueType[] =>
+    this.filterProjectIssueTypes(projectId, true)
+  );
 
   getProjectIssueTypeIds = computedFn(
     (projectId: string | null | undefined): string[] =>
