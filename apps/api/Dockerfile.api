@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM python:3.12.10-alpine
 
 # set environment variables
@@ -21,7 +22,11 @@ RUN apk add --no-cache --upgrade \
 COPY requirements.txt ./
 COPY requirements ./requirements
 RUN apk add --no-cache libffi-dev
-RUN apk add --no-cache --virtual .build-deps \
+# The pip cache is a BuildKit cache mount, so wheels compiled from source (cryptography,
+# psycopg, lxml...) are reused instead of rebuilt with gcc/cargo on every run. The mount is
+# not part of the image, so the layer stays as small as it was with --no-cache-dir.
+RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+    apk add --no-cache --virtual .build-deps \
     "bash~=5.2" \
     "g++" \
     "gcc" \
@@ -32,7 +37,7 @@ RUN apk add --no-cache --virtual .build-deps \
     "libc-dev" \
     "linux-headers" \
     && \
-    pip install -r requirements.txt --compile --no-cache-dir \
+    pip install -r requirements.txt --compile \
     && \
     apk del .build-deps \
     && \

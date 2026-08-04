@@ -11,34 +11,119 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Works out which images a push actually affects, so a change confined to (say)
+  # apps/api does not rebuild the four Node images. Anything shared — packages/,
+  # the lockfile, this workflow — deliberately rebuilds everything.
+  changes:
+    name: Detect changed images
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    outputs:
+      # JSON array of matrix entries to build. Empty array => build_push is skipped entirely.
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+      any: ${{ steps.build-matrix.outputs.any }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Skipped on workflow_dispatch: without a `base` the action would diff against the
+      # default branch and report a huge changeset. Manual runs are an explicit
+      # "rebuild everything" instead — see the next step.
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          # `base` must be set explicitly. Left unset it defaults to the DEFAULT BRANCH,
+          # so a push to preview would diff preview against that branch rather than
+          # against preview's own previous commit — marking nearly everything as changed
+          # and quietly defeating this filter. Setting base == head makes the action use
+          # the push event's before-SHA, which is the diff we actually want.
+          base: ${{ github.ref }}
+          filters: |
+            shared: &shared
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - 'turbo.json'
+              - '.npmrc'
+              - '.dockerignore'
+              - '.github/workflows/build-branch.yml'
+            web:
+              - *shared
+              - 'apps/web/**'
+            space:
+              - *shared
+              - 'apps/space/**'
+            admin:
+              - *shared
+              - 'apps/admin/**'
+            live:
+              - *shared
+              - 'apps/live/**'
+            api:
+              - '.github/workflows/build-branch.yml'
+              - 'apps/api/**'
+            proxy:
+              - '.github/workflows/build-branch.yml'
+              - 'apps/proxy/**'
+
+      # Turn the filter results into the matrix. On workflow_dispatch the filter step
+      # above is skipped and FORCE_ALL builds everything — the manual rebuild escape hatch.
+      - name: Build matrix
+        id: build-matrix
+        env:
+          FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' }}
+          CHANGED: ${{ toJSON(steps.filter.outputs) }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, sys
+
+          IMAGES = [
+              ("web",   "plane-frontend", ".",            "./apps/web/Dockerfile.web"),
+              ("space", "plane-space",    ".",            "./apps/space/Dockerfile.space"),
+              ("admin", "plane-admin",    ".",            "./apps/admin/Dockerfile.admin"),
+              ("live",  "plane-live",     ".",            "./apps/live/Dockerfile.live"),
+              ("api",   "plane-backend",  "./apps/api",   "./apps/api/Dockerfile.api"),
+              ("proxy", "plane-proxy",    "./apps/proxy", "./apps/proxy/Dockerfile.ce"),
+          ]
+
+          force = os.environ["FORCE_ALL"] == "true"
+          changed = json.loads(os.environ["CHANGED"] or "{}") or {}
+
+          # If the filter step ran but produced none of the expected keys, something is
+          # wrong with it. Failing closed here would silently ship nothing and make the
+          # deploy a no-op, so build everything and be loud instead.
+          if not force and not any(key in changed for key, *_ in IMAGES):
+              print("::warning::paths-filter produced no usable output; building all images", file=sys.stderr)
+              force = True
+
+          entries = [
+              {"image": image, "build-context": ctx, "dockerfile-path": df}
+              for key, image, ctx, df in IMAGES
+              if force or changed.get(key) == "true"
+          ]
+
+          print("matrix=" + json.dumps({"include": entries}))
+          print("any=" + ("true" if entries else "false"))
+          # stderr, so this stays out of $GITHUB_OUTPUT
+          print("Building:", [e["image"] for e in entries] or "nothing", file=sys.stderr)
+          PY
+
   build_push:
     name: Build-Push ${{ matrix.image }}
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
     runs-on: ubuntu-22.04
     permissions:
       contents: read
       packages: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - image: plane-frontend
-            build-context: .
-            dockerfile-path: ./apps/web/Dockerfile.web
-          - image: plane-space
-            build-context: .
-            dockerfile-path: ./apps/space/Dockerfile.space
-          - image: plane-admin
-            build-context: .
-            dockerfile-path: ./apps/admin/Dockerfile.admin
-          - image: plane-live
-            build-context: .
-            dockerfile-path: ./apps/live/Dockerfile.live
-          - image: plane-backend
-            build-context: ./apps/api
-            dockerfile-path: ./apps/api/Dockerfile.api
-          - image: plane-proxy
-            build-context: ./apps/proxy
-            dockerfile-path: ./apps/proxy/Dockerfile.ce
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -72,5 +157,13 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # mode=max is required, not optional: these are multi-stage builds whose
+          # expensive `installer` stage is discarded (the final image is just nginx +
+          # static files). mode=min exports only final-image layers, which would never
+          # include the pnpm install layer this Dockerfile is arranged to cache.
+          #
+          # The cost is cache size against GHA's 10GB/repo cap. That is now mitigated by
+          # only building images that actually changed, so the six scopes are rarely
+          # all rewritten at once.
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
