@@ -154,21 +154,21 @@ export const ProjectSettingsIssueTypeList = observer(function ProjectSettingsIss
                 </div>
                 {isEditable && (
                   <div className="flex flex-shrink-0 items-center gap-3">
+                    {/* The tooltip clones its child to attach a trigger, so it wraps
+                        the plain label only — wrapping the toggle breaks it. */}
                     <Tooltip
                       tooltipContent={
                         issueType.is_active
-                          ? "Active — offered when creating work items. Turning this off only hides it from the pickers; existing work items keep their type."
-                          : "Inactive — not offered when creating work items. Turn it back on to use it again."
+                          ? "Offered when creating work items. Turning this off only hides it from the pickers; existing work items keep their type."
+                          : "Not offered when creating work items. Turn it back on to use it again."
                       }
                       position="top"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-caption-sm-regular text-tertiary">
-                          {issueType.is_active ? "Active" : "Inactive"}
-                        </span>
-                        <ToggleSwitch value={issueType.is_active} onChange={() => handleToggleActive(issueType)} />
-                      </div>
+                      <span className="text-caption-sm-regular text-tertiary">
+                        {issueType.is_active ? "Active" : "Inactive"}
+                      </span>
                     </Tooltip>
+                    <ToggleSwitch value={issueType.is_active} onChange={() => handleToggleActive(issueType)} />
                     <CustomMenu ellipsis placement="bottom-end">
                       <CustomMenu.MenuItem onClick={() => handleEdit(issueType)}>
                         {t("common.edit")}
