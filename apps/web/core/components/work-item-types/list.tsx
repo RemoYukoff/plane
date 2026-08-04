@@ -14,8 +14,10 @@ import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
 import { Logo } from "@plane/propel/emoji-icon-picker";
 import { setToast, TOAST_TYPE } from "@plane/propel/toast";
+import { Tooltip } from "@plane/propel/tooltip";
 import type { TIssueType } from "@plane/types";
 import { CustomMenu, Loader, ToggleSwitch } from "@plane/ui";
+import { cn } from "@plane/utils";
 // components
 import { SettingsHeading } from "@/components/settings/heading";
 import { CreateUpdateIssueTypeModal } from "@/components/work-item-types/create-update-modal";
@@ -38,7 +40,8 @@ export const ProjectSettingsIssueTypeList = observer(function ProjectSettingsIss
   const { allowPermissions } = useUserPermissions();
   // derived values
   const isEditable = allowPermissions([EUserPermissions.ADMIN], EUserPermissionsLevel.PROJECT);
-  const issueTypes = getProjectIssueTypes(projectId?.toString());
+  // settings is where an inactive type gets switched back on, so it has to list them
+  const issueTypes = getProjectIssueTypes(projectId?.toString(), true);
 
   const { isLoading } = useSWR(
     workspaceSlug && projectId ? `PROJECT_ISSUE_TYPES_${workspaceSlug}_${projectId}` : null,
@@ -128,7 +131,7 @@ export const ProjectSettingsIssueTypeList = observer(function ProjectSettingsIss
           <div className="divide-y-[0.5px] divide-subtle rounded-md border-[0.5px] border-subtle">
             {issueTypes.map((issueType) => (
               <div key={issueType.id} className="flex items-center justify-between gap-2 px-4 py-3">
-                <div className="flex min-w-0 items-center gap-3">
+                <div className={cn("flex min-w-0 items-center gap-3", !issueType.is_active && "opacity-60")}>
                   <Logo logo={issueType.logo_props} size={16} />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -136,6 +139,11 @@ export const ProjectSettingsIssueTypeList = observer(function ProjectSettingsIss
                       {issueType.is_epic && (
                         <span className="rounded-sm bg-layer-2 px-1.5 py-0.5 text-caption-sm-regular text-tertiary">
                           Epic
+                        </span>
+                      )}
+                      {!issueType.is_active && (
+                        <span className="rounded-sm bg-layer-2 px-1.5 py-0.5 text-caption-sm-regular text-tertiary">
+                          Inactive
                         </span>
                       )}
                     </div>
@@ -146,7 +154,21 @@ export const ProjectSettingsIssueTypeList = observer(function ProjectSettingsIss
                 </div>
                 {isEditable && (
                   <div className="flex flex-shrink-0 items-center gap-3">
-                    <ToggleSwitch value={issueType.is_active} onChange={() => handleToggleActive(issueType)} />
+                    <Tooltip
+                      tooltipContent={
+                        issueType.is_active
+                          ? "Active — offered when creating work items. Turning this off only hides it from the pickers; existing work items keep their type."
+                          : "Inactive — not offered when creating work items. Turn it back on to use it again."
+                      }
+                      position="top"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-caption-sm-regular text-tertiary">
+                          {issueType.is_active ? "Active" : "Inactive"}
+                        </span>
+                        <ToggleSwitch value={issueType.is_active} onChange={() => handleToggleActive(issueType)} />
+                      </div>
+                    </Tooltip>
                     <CustomMenu ellipsis placement="bottom-end">
                       <CustomMenu.MenuItem onClick={() => handleEdit(issueType)}>
                         {t("common.edit")}

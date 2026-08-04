@@ -20,7 +20,7 @@ export interface IIssueTypeStore {
   fetchedMap: Record<string, boolean>;
   // computed actions
   getIssueTypeById: (issueTypeId: string | null | undefined) => TIssueType | undefined;
-  getProjectIssueTypes: (projectId: string | null | undefined) => TIssueType[];
+  getProjectIssueTypes: (projectId: string | null | undefined, includeInactive?: boolean) => TIssueType[];
   getProjectIssueTypeIds: (projectId: string | null | undefined) => string[];
   getProjectDefaultIssueTypeId: (projectId: string | null | undefined) => string | undefined;
   getProjectEpicTypeId: (projectId: string | null | undefined) => string | undefined;
@@ -74,12 +74,17 @@ export class IssueTypeStore implements IIssueTypeStore {
 
   /**
    * Types linked to a project, ordered the way they are shown in pickers.
+   *
+   * Inactive types are left out by default so they stop being offered when
+   * creating work items. Settings passes ``includeInactive`` — hiding them
+   * there would make deactivating a type look like deleting it, with no way
+   * back short of recreating it.
    */
-  getProjectIssueTypes = computedFn((projectId: string | null | undefined): TIssueType[] => {
+  getProjectIssueTypes = computedFn((projectId: string | null | undefined, includeInactive = false): TIssueType[] => {
     if (!projectId) return [];
     return sortBy(
       Object.values(this.issueTypeMap).filter(
-        (issueType) => issueType.is_active && issueType.project_ids?.includes(projectId)
+        (issueType) => (includeInactive || issueType.is_active) && issueType.project_ids?.includes(projectId)
       ),
       ["level", "name"]
     );
