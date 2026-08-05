@@ -47,6 +47,7 @@ from plane.api.serializers import (
     IssueCommentSerializer,
     IssueLinkSerializer,
     IssueRelationCreateSerializer,
+    IssueRelationRemoveSerializer,
     IssueRelationResponseSerializer,
     IssueRelationSerializer,
     IssueSerializer,
@@ -2619,3 +2620,76 @@ class IssueRelationListCreateAPIEndpoint(BaseAPIView):
             serializer_class(refetched_relations, many=True).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class IssueRelationRemoveAPIEndpoint(BaseAPIView):
+    """Issue Relation Remove Endpoint"""
+
+    serializer_class = IssueRelationRemoveSerializer
+    model = IssueRelation
+    permission_classes = [ProjectEntityPermission]
+
+    @work_item_relation_docs(
+        operation_id="remove_work_item_relation",
+        summary="Remove work item relation",
+        description="Remove the relationship between two work items. The relation is matched in either direction, so the caller does not need to know which side stores it.",  # noqa E501
+        parameters=[
+            ISSUE_ID_PARAMETER,
+        ],
+        request=OpenApiRequest(
+            request=IssueRelationRemoveSerializer,
+            examples=[
+                OpenApiExample(
+                    name="Remove relation",
+                    value={"related_issue": "550e8400-e29b-41d4-a716-446655440000"},
+                )
+            ],
+        ),
+        responses={
+            204: OpenApiResponse(description="Work item relation removed successfully"),
+            400: INVALID_REQUEST_RESPONSE,
+            404: ISSUE_NOT_FOUND_RESPONSE,
+        },
+    )
+    def post(self, request, slug, project_id, issue_id):
+        """Remove work item relation
+
+        Delete the relation between this work item and the related one,
+        regardless of which side of the relation each work item is stored on.
+        Automatically tracks relation deletion activity.
+        """
+        serializer = IssueRelationRemoveSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        related_issue = serializer.validated_data["related_issue"]
+
+        # Scope to workspace: relations may cross projects, so project scope
+        # would miss legitimate relations while still not being a tighter bound.
+        issue_relation = IssueRelation.objects.filter(
+            Q(issue_id=related_issue, related_issue_id=issue_id) | Q(issue_id=issue_id, related_issue_id=related_issue),
+            workspace__slug=slug,
+        ).first()
+
+        if issue_relation is None:
+            return Response(
+                {"error": "Work item relation does not exist"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        current_instance = json.dumps(IssueRelationSerializer(issue_relation).data, cls=DjangoJSONEncoder)
+        issue_relation.delete()
+
+        issue_activity.delay(
+            type="issue_relation.activity.deleted",
+            requested_data=json.dumps(request.data, cls=DjangoJSONEncoder),
+            actor_id=str(request.user.id),
+            issue_id=str(issue_id),
+            project_id=str(project_id),
+            current_instance=current_instance,
+            epoch=int(timezone.now().timestamp()),
+            notification=True,
+            origin=base_host(request=request, is_app=True),
+        )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)

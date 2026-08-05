@@ -18,6 +18,7 @@ from plane.api.views import (
     WorkspaceIssueAPIEndpoint,
     IssueSearchEndpoint,
     IssueRelationListCreateAPIEndpoint,
+    IssueRelationRemoveAPIEndpoint,
 )
 
 # Deprecated url patterns
@@ -150,6 +151,24 @@ new_url_patterns = [
         "workspaces/<str:slug>/projects/<uuid:project_id>/work-items/<uuid:issue_id>/relations/",
         IssueRelationListCreateAPIEndpoint.as_view(http_method_names=["get", "post"]),
         name="work-item-relation-list",
+    ),
+    # The SDK builds this URL without a trailing slash. APPEND_SLASH would answer
+    # 301, and requests downgrades a redirected POST to GET and drops the body,
+    # so the create would silently arrive empty. Register the exact path too.
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/work-items/<uuid:issue_id>/relations",
+        IssueRelationListCreateAPIEndpoint.as_view(http_method_names=["get", "post"]),
+        name="work-item-relation-list-no-slash",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/work-items/<uuid:issue_id>/relations/remove/",
+        IssueRelationRemoveAPIEndpoint.as_view(http_method_names=["post"]),
+        name="work-item-relation-remove",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/work-items/<uuid:issue_id>/relations/remove",
+        IssueRelationRemoveAPIEndpoint.as_view(http_method_names=["post"]),
+        name="work-item-relation-remove-no-slash",
     ),
 ]
 
